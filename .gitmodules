@@ -1,0 +1,3 @@
+[submodule "lib/nze_game_sdl"]
+	path = lib/nze_game_sdl
+	url = https://github.com/NoamZeise/nze-game-sdl.git

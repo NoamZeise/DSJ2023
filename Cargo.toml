@@ -1,5 +1,5 @@
 [package]
-name = "ds2023"
+name = "deli_cat_essen"
 version = "0.1.0"
 edition = "2021"
 
@@ -7,3 +7,4 @@ edition = "2021"
 
 [dependencies]
 nze_game_sdl = { path = "lib/nze_game_sdl/", version = "0.1.2" }
+rand = { version = "0.8" }

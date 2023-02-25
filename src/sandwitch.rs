@@ -3,7 +3,9 @@ use std::{collections::{VecDeque, HashMap, vec_deque::Iter}, path::Path, slice::
 use nze_game_sdl::{Render, Camera, Error, GameObject, geometry::Vec2};
 use rand::prelude::*;
 
-#[derive(Hash, Eq, PartialEq)]
+use crate::moving_target::Target;
+
+#[derive(Hash, Eq, PartialEq, Clone, Copy)]
 pub enum Ingredients {
     Bread,
     Lettuce,
@@ -27,29 +29,102 @@ pub fn get_rand_ingredient(rng: &mut ThreadRng) -> Ingredients {
     get_ingredient((rng.gen::<f64>() * INGREDIENT_COUNT as f64) as usize)
 }
 
+#[derive(Clone)]
 pub struct Sandwitch {
     pub ingredients : VecDeque<Ingredients>,
+    pub ing_targets: VecDeque<Target>,
+    pub target: Target,
+    sw_dir: f64,
 }
 
 impl Sandwitch {
     pub fn new() -> Sandwitch {
         Sandwitch {
             ingredients: VecDeque::new(),
+            ing_targets: VecDeque::new(),
+            target: Target::new(),
+            sw_dir: -1.0,
         }
     }
 
-    pub fn add_back(&mut self, ingredient: Ingredients) {
+    pub fn add_back(&mut self, ingredient: Ingredients, t: Target) {
         self.ingredients.push_back(ingredient);
+        let mut t = t;
+        t.speed = self.target.speed;
+        self.ing_targets.push_back(t);
     }
 
     pub fn add(&mut self, ingredient: Ingredients) {
         self.ingredients.push_front(ingredient);
+        self.ing_targets.push_front(Target::new_with_speed(
+            self.target.speed,
+            Vec2::new(
+                self.target.get_pos_no_offset().x,
+                self.target.get_pos_no_offset().y + Self::get_ing_yoff(self.sw_dir, self.ing_targets.len() as f64 - 10.0)
+            )
+        ));
     }
 
-    pub fn take(&mut self) -> Option<Ingredients> {
-        self.ingredients.pop_back()
+    pub fn take(&mut self) -> Option<(Ingredients, Target)> {
+        let ing = self.ingredients.pop_back();
+        let tar = self.ing_targets.pop_back();
+        if ing.is_none() || tar.is_none() {
+            return None;
+        }
+        Some((ing.unwrap(), tar.unwrap()))
+    }
+        
+
+    pub fn reset(&mut self) {
+        self.ingredients.clear();
+        self.ing_targets.clear();
+        self.add_back(Ingredients::Bread, self.target);
+    }
+
+    pub fn clear(&mut self) {
+        let mut i = 0;
+        while i < self.ing_targets.len() && i < self.ingredients.len() {
+            if self.ing_targets[i].is_active() {
+                self.ing_targets.remove(i);
+                self.ingredients.remove(i);
+            } else {
+                i += 1;
+            }
+        }
+    }
+
+    pub fn set_target(&mut self, target: Vec2) {
+        self.target.set_target(target);
+        for (i, t) in self.ing_targets.iter_mut().enumerate() {
+            t.set_target(
+                Vec2::new(
+                    target.x,
+                    target.y + Self::get_ing_yoff(self.sw_dir, i as f64)
+                )
+            );
+        }
+    }
+
+    fn get_ing_yoff(dir: f64, i: f64) -> f64 {
+       dir * (i as f64 * (ING_SIZE.y + QUEUE_ING_SPACING))
+    }
+
+    pub fn set_speed(&mut self, speed: f64) {
+        self.target.speed = speed;
+        for t in self.ing_targets.iter_mut() {
+            t.speed = speed;
+        }
+    }
+
+    pub fn update(&mut self, dt: f64) {
+        self.target.update(dt);
+        for t in self.ing_targets.iter_mut() {
+            t.update(dt);
+        }
     }
 }
+
+const QUEUE_SPEED: f64 = 400.0;
 
 pub struct SandwitchMachine {
     sandwitches: Vec<Sandwitch>,
@@ -62,14 +137,41 @@ pub struct SandwitchMachine {
 impl SandwitchMachine {
     pub fn new() -> SandwitchMachine {
         let mut sm = SandwitchMachine {
-            queue_size: 4,
-            sandwitches: vec![Sandwitch::new(), Sandwitch::new(), Sandwitch::new(), Sandwitch::new()],
+            queue_size: 6,
+            sandwitches: Vec::new(),
             queue: Sandwitch::new(),
             active: 0,
             rng:thread_rng(),
         };
+        for _ in 0..sm.queue_size {
+            sm.sandwitches.push(Sandwitch::new());
+        }
+        for s in sm.sandwitches.iter_mut() {
+            s.reset();
+        }
+        sm.queue.set_speed(QUEUE_SPEED);
+        sm.queue.target.breath = true;
+        sm.queue.target.breath_size = Vec2::new(0.0, 4.0);
+        sm.queue.target.breath_speed = 0.5;
+        sm.queue.sw_dir = 1.0;
         sm.fill_queue();
         sm
+    }
+
+    pub fn update(&mut self, dt: f64) {
+        for (i, sm) in self.sandwitches.iter_mut().enumerate() {
+            sm.update(dt);
+            sm.set_target(
+                Vec2::new(SANDWITCH_BASE.x + (i as f64 * QUEUE_MOVE), SANDWITCH_BASE.y)
+            );
+        }
+        self.sandwitches[0].clear();
+        self.queue.set_target(
+            Vec2::new(QUEUE_BASE.x + QUEUE_MOVE * self.active as f64,
+                      QUEUE_BASE.y
+            ));
+        self.queue.update(dt);
+        self.queue.target.breath_update(dt);
     }
 
     pub fn fill_queue(&mut self) {
@@ -79,17 +181,18 @@ impl SandwitchMachine {
     }
 
     pub fn release(&mut self) {
-        self.sandwitches[self.active].add_back(
-            match self.queue.take() {
-                Some(i) => i,
-                None => Ingredients::Bread,
-            }
-        );
+        let (i, t) = self.queue.take().unwrap();
+        self.sandwitches[self.active].add_back(i, t);
         self.fill_queue();
     }
 
     pub fn bin(&mut self) {
-        self.sandwitches[self.active].ingredients.clear();
+        if self.sandwitches[self.active].ingredients.len() > 1 {
+            let (i, t) = self.sandwitches[self.active].take().unwrap();
+            self.queue.add_back(
+                i, t
+            );
+        }
     }
 
     pub fn switch(&mut self, diff: i32) {
@@ -104,38 +207,52 @@ impl SandwitchMachine {
     pub fn sandwitches(&mut self) -> IterMut<Sandwitch> {
         self.sandwitches.iter_mut()
     }
+    
 }
 
 pub struct SandwitchRender {
     ingredient: HashMap<Ingredients, GameObject>,
+    chef: GameObject,
 }
 
-const ING_SIZE: Vec2 = Vec2::new(50.0, 20.0);
-const QUEUE_BASE: Vec2 = Vec2::new(10.0, 20.0);
-const QUEUE_MOVE: f64 = ING_SIZE.x * 1.5;
-const QUEUE_ING_SPACING: f64 = -ING_SIZE.y * 0.2;
-const SANDWITCH_BASE: Vec2 = Vec2::new(QUEUE_BASE.x, QUEUE_BASE.y + ING_SIZE.y * 10.0);
+pub const ING_SIZE: Vec2 = Vec2::new(46.0, 24.0);
+const QUEUE_BASE: Vec2 = Vec2::new(30.0, 20.0);
+const CHEF_OFFSET: Vec2 = Vec2::new(-20.0, 91.0);
+const QUEUE_MOVE: f64 = ING_SIZE.x * 1.6;
+const QUEUE_ING_SPACING: f64 = -ING_SIZE.y * 0.5;
+pub const SANDWITCH_BASE: Vec2 = Vec2::new(QUEUE_BASE.x, QUEUE_BASE.y + ING_SIZE.y * 8.0);
 
 impl SandwitchRender {
     pub fn new(render: &mut Render) -> Result<SandwitchRender, Error> {
         Ok(SandwitchRender {
             ingredient: Self::get_ingredient_hash(render)?,
+            chef: GameObject::new_from_tex(render.texture_manager.load(Path::new("resources/textures/chef.png"))?),
         })
     }
 
-    pub fn draw(&self, cam: &mut Camera, machine: &SandwitchMachine) {
-        self.render_sandwitch(cam, machine.queue.ingredients.iter(),
-                              QUEUE_BASE, QUEUE_MOVE * machine.active as f64, ING_SIZE, QUEUE_ING_SPACING, 1.0);
+    pub fn draw(&mut self, cam: &mut Camera, machine: &SandwitchMachine) {
+        self.chef.rect.x = machine.queue.target.get_pos().x + CHEF_OFFSET.x;
+        self.chef.rect.y = machine.queue.target.get_pos().y + CHEF_OFFSET.y;
+        cam.draw(&self.chef);
+        self.render_sw(cam, &machine.queue);
 
-        for (sw_i, sw) in machine.sandwitches.iter().enumerate() {
-            self.render_sandwitch(cam, sw.ingredients.iter(),
-                                  SANDWITCH_BASE,
-                                  sw_i as f64 * QUEUE_MOVE,
-                                  ING_SIZE, QUEUE_ING_SPACING, -1.0);
+        for sw in machine.sandwitches.iter() {
+            self.render_sw(cam, &sw);
         }
     }
 
-    pub fn render_sandwitch<'a>(&self, cam: &mut Camera, ings: Iter<Ingredients>,
+    pub fn render_sw(&self, cam: &mut Camera, sw: &Sandwitch) {
+        for (i, ing) in sw.ingredients.iter().enumerate() {
+            let mut ing = self.ingredient.get(&ing).unwrap().clone();
+            ing.rect.w = ING_SIZE.x;
+            ing.rect.h = ING_SIZE.y;
+            ing.rect.x = sw.ing_targets[i].get_pos_no_offset().x;
+            ing.rect.y = sw.ing_targets[i].get_pos_no_offset().y;
+            cam.draw(&ing);
+        }
+    }
+
+    pub fn render_ings(&self, cam: &mut Camera, ings: Iter<Ingredients>,
                             base: Vec2, x_off: f64, ing_size: Vec2, ing_spacing: f64, dir_mod: f64
     ) {
         for (i, ing) in ings.enumerate() {
@@ -158,7 +275,7 @@ impl SandwitchRender {
             Ingredients::Lettuce, Path::new("resources/textures/ingredient/lettuce.png"))?;
         Self::add_ing_to_hashmap(
             render, &mut textures,
-            Ingredients::Meat, Path::new("resources/textures/ingredient/meat.png"))?;
+            Ingredients::Meat, Path::new("resources/textures/ingredient/patty.png"))?;
         Self::add_ing_to_hashmap(
             render, &mut textures,
             Ingredients::Tomato, Path::new("resources/textures/ingredient/tomato.png"))?;

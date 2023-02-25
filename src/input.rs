@@ -1,18 +1,47 @@
-use nze_game_sdl::input::{Controls, keyboard::Key, controller::Button};
+use nze_game_sdl::input::{Controls, keyboard::Key, controller::{Button, Side}};
+
+enum Dir {
+    Up,
+    Down,
+    Left,
+    Right
+}
+
+struct Joy {
+    dir: Dir,
+    side: Side,
+}
+
+const JOY_ACTIVATION: f64 = 0.8;
+impl Joy {
+    fn new(side: Side, dir: Dir) -> Joy{
+        Joy { dir, side }
+    }
+    fn check(&self, controls: &Controls) -> bool {
+        let v =  controls.c.joy(0, self.side.clone());
+        match self.dir {
+            Dir::Up => v.y < -JOY_ACTIVATION,
+            Dir::Down => v.y > JOY_ACTIVATION,
+            Dir::Left => v.x < -JOY_ACTIVATION,
+            Dir::Right => v.x > JOY_ACTIVATION,
+        }
+    }
+}
 
 pub struct Btn {
     input: bool,
     prev_input: bool,
     key: Vec<Key>,
     btn: Vec<Button>,
+    joy: Vec<Joy>,
 }
 
 impl Btn {
-    pub fn new(key: Vec<Key>, btn: Vec<Button>) -> Btn {
+    fn new(key: Vec<Key>, btn: Vec<Button>, joy: Vec<Joy>) -> Btn {
         Btn {
             input: false,
             prev_input: false,
-            key, btn
+            key, btn, joy
         }
     }
 
@@ -26,6 +55,11 @@ impl Btn {
         }
         for b in self.btn.iter() {
             if controls.c.hold(0, *b) {
+                self.input = true;
+            }
+        }
+        for j in self.joy.iter() {
+            if j.check(controls) {
                 self.input = true;
             }
         }
@@ -50,10 +84,26 @@ pub struct Input {
 impl Input {
     pub fn new() -> Input {
         Input {
-            left: Btn::new(vec![Key::Left, Key::A], vec![Button::DPadLeft]),
-            right: Btn::new(vec![Key::Right, Key::D], vec![Button::DPadRight]),
-            down: Btn::new(vec![Key::Down, Key::S], vec![Button::DPadRight]),
-            up: Btn::new(vec![Key::Up, Key::W], vec![Button::DPadUp]),
+            left: Btn::new(
+                vec![Key::Left, Key::A],
+                vec![Button::DPadLeft],
+                vec![Joy::new(Side::Left, Dir::Left)]
+            ),
+            right: Btn::new(
+                vec![Key::Right, Key::D],
+                vec![Button::DPadRight],
+                vec![Joy::new(Side::Left, Dir::Right)]
+            ),
+            down: Btn::new(
+                vec![Key::Down, Key::S],
+                vec![Button::DPadDown, Button::B],
+                vec![Joy::new(Side::Left, Dir::Down)]
+            ),
+            up: Btn::new(
+                vec![Key::Up, Key::W],
+                vec![Button::DPadUp, Button::A],
+                vec![Joy::new(Side::Left, Dir::Up)]
+            ),
         }
     }
 

@@ -18,9 +18,9 @@ struct Customer {
 
 const MIN_REQUEST_SIZE: f64 = 2.0;
 const MAX_REQUEST_DELTA: f64 = 3.0;
-const INITIAL_WAIT_TIME: f64 = 60.0;
-const INITIAL_SPAWN_TIME: f64 = 14.0;
-const INITIAL_LIVES: u32 = 3;
+const INITIAL_WAIT_TIME: f64 = 45.0;
+const INITIAL_SPAWN_TIME: f64 = 15.0;
+pub const INITIAL_LIVES: u32 = 3;
 const ACTIVE_CUSTOMERS: usize = 3;
 
 impl Customer {
@@ -33,7 +33,7 @@ impl Customer {
            target: Target::new(),
            waiting: false,
            wait_time: 0.0,
-           wait_max: INITIAL_WAIT_TIME - (score as f64 * 0.4),
+           wait_max: (INITIAL_WAIT_TIME - (score as f64 * 0.8)).max(15.0),
            max_request_delta: MAX_REQUEST_DELTA + (score * 0.2),
        };
         c.target.breath = true;
@@ -103,7 +103,7 @@ impl CustomerLine {
             leaving_customers: Vec::new(),
             angry_customers: Vec::new(),
             rng: thread_rng(),
-            time_since_customer: INITIAL_SPAWN_TIME,
+            time_since_customer: INITIAL_SPAWN_TIME / 2.0,
             next_customer_delay: INITIAL_SPAWN_TIME,
             score: 0,
             lives: INITIAL_LIVES,
@@ -222,7 +222,7 @@ impl CustomerLine {
 
     fn add_score(&mut self) {
         self.score += 1;
-        self.next_customer_delay -= 0.1;
+        self.next_customer_delay = (INITIAL_SPAWN_TIME - (self.score as f64 * 0.4)).max(5.0);
     }
 
     pub fn get_score(&self) -> u64 {
@@ -242,12 +242,14 @@ const CUSTOMER_START: Vec2 = Vec2::new(500.0, 280.0);
 const CUSTOMER_BASE: Vec2 = Vec2::new(100.0, CUSTOMER_START.y - 5.0);
 const CUSTOMER_END: Vec2 = Vec2::new(CUSTOMER_BASE.x - 25.0, CUSTOMER_BASE.y + 150.0);
 const CUSTOMER_ING_SIZE: Vec2 = Vec2::new(24.0, 12.0);
-const CUSTOMER_ING_OFFSET: Vec2 = Vec2::new(26.0, 34.0);
+const CUSTOMER_ING_OFFSET: Vec2 = Vec2::new(27.0, 30.0);
 const CUSTOMER_ING_SPACING: f64 = -CUSTOMER_ING_SIZE.y * 0.5;
 const CUSTOMER_SIZE: Vec2 = Vec2::new(90.0, 0.0);
 const CUSTOMER_OFFSET: Vec2 = Vec2::new(-20.0, 20.0);
 
-const CUSTOMER_PATIENCE_OFFSET: Rect = Rect::new(-5.0, -20.0, 30.0, 5.0);
+const CUSTOMER_SPEECH_OFFSET: Vec2 = Vec2::new(2.0, 25.0);
+
+const CUSTOMER_PATIENCE_OFFSET: Rect = Rect::new(15.0, -5.0, 30.0, 5.0);
 
 impl CustomerRender {
     pub fn new(render: &mut Render) -> Result<CustomerRender, Error> {
@@ -277,9 +279,9 @@ impl CustomerRender {
             }
             let pos_abs = customers.customers[i].target.get_pos_no_offset();
             let mut speech = self.speech.clone();
-            speech.rect.x = pos_abs.x - CUSTOMER_OFFSET.x + CUSTOMER_ING_OFFSET.x;
-            speech.rect.h = (customers.customers[i].ings.len() as f64 * (CUSTOMER_ING_SIZE.y + CUSTOMER_ING_SPACING)) + 50.0;
-            speech.rect.y = (pos_abs.y - CUSTOMER_OFFSET.y - speech.rect.h) + 45.0 + CUSTOMER_ING_OFFSET.y;
+            speech.rect.x = pos_abs.x - CUSTOMER_OFFSET.x + CUSTOMER_ING_OFFSET.x + CUSTOMER_SPEECH_OFFSET.x;
+            speech.rect.h = (customers.customers[i].ings.len() as f64 * (CUSTOMER_ING_SIZE.y + CUSTOMER_ING_SPACING)) + 25.0;
+            speech.rect.y = (pos_abs.y - CUSTOMER_OFFSET.y - speech.rect.h) + CUSTOMER_SPEECH_OFFSET.y + CUSTOMER_ING_OFFSET.y;
             cam.draw(&speech);
             sw_render.render_ings(cam, customers.customers[i].ings.iter(),
                                   Vec2::new(pos_abs.x - CUSTOMER_OFFSET.x,
@@ -310,9 +312,9 @@ impl CustomerRender {
         pos.y += CUSTOMER_PATIENCE_OFFSET.y;
         let ratio = c.wait_time / c.wait_max;
         let length = CUSTOMER_PATIENCE_OFFSET.w * ratio;
+        cam.draw_rect(Rect::new(pos.x, pos.y, CUSTOMER_PATIENCE_OFFSET.w, CUSTOMER_PATIENCE_OFFSET.h),
+                      Colour::new(124, 199, 109, 255), Vec2::new(1.0, 1.0));
         cam.draw_rect(Rect::new(pos.x, pos.y, length, CUSTOMER_PATIENCE_OFFSET.h),
-                      Colour::new(255, 0, 0, 255), Vec2::new(1.0, 1.0));
-        cam.draw_rect(Rect::new(pos.x + length, pos.y, CUSTOMER_PATIENCE_OFFSET.w - length, CUSTOMER_PATIENCE_OFFSET.h),
-                      Colour::new(0, 255, 0, 255), Vec2::new(1.0, 1.0));
+                      Colour::new(117, 68, 68, 255), Vec2::new(1.0, 1.0));
     }
 }

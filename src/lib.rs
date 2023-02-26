@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use customer::{CustomerLine, CustomerRender};
+use customer::{CustomerLine, CustomerRender, INITIAL_LIVES};
 use nze_game_sdl::{
     Camera,
     Render,
@@ -31,6 +31,8 @@ pub struct Game {
     end_screen: GameObject,
     end_sign: GameObject,
     paused: bool,
+    heart: GameObject,
+    heart_off: GameObject,
 }
 
 impl Game {
@@ -47,6 +49,8 @@ impl Game {
             end_sign: GameObject::new_from_tex(render.texture_manager.load(Path::new("resources/textures/sign.png"))?),
             game_ended: false,
             paused: false,
+            heart: GameObject::new_from_tex(render.texture_manager.load(Path::new("resources/textures/heart.png"))?),
+            heart_off: GameObject::new_from_tex(render.texture_manager.load(Path::new("resources/textures/heartless.png"))?),
         })
     }
 
@@ -99,29 +103,35 @@ impl Game {
     
     pub fn draw(&mut self, cam: &mut Camera) {
         cam.draw(&self.bg);
-        cam.draw_rect(self.bg.rect, Colour::new(0, 0, 0, BG_OPACITY), Vec2::zero());
        // cam.draw_rect(Rect::new(SCORE_POS.x - 5.0, SCORE_POS.y - 5.0, 120.0, SCORE_SIZE as f64 * 1.5),
         //              Colour::new(100, 100, 100, 255), Vec2::new(1.0, 1.0));
-        cam.draw_disposable_text(&self.font, format!("Score: {}", self.customer_line.get_score()), SCORE_SIZE, SCORE_POS,
-                                 Colour::new(100, 100, 10, 255), Vec2::new(1.0, 1.0));
-        for i in 0..self.customer_line.lives() {
-            cam.draw_rect(Rect::new(LIVES_POS.x + ((LIVES_RECT.x + LIVES_BUFFER) * i as f64),
-                                    LIVES_POS.y, LIVES_RECT.x, LIVES_RECT.y),
-                          Colour::new(255, 0, 0, 255), Vec2::new(0.0, 0.0));
+        for i in 0..INITIAL_LIVES{
+            let mut h = if i < self.customer_line.lives()  {
+                self.heart.clone()
+            } else {
+                self.heart_off.clone()
+            };
+            h.rect.x = LIVES_POS.x + ((h.rect.w + LIVES_BUFFER) * i as f64);
+            h.rect.y = LIVES_POS.y;
+            cam.draw(&h);
         }
+        cam.draw_rect(self.bg.rect, Colour::new(0, 0, 0, BG_OPACITY), Vec2::zero());
+        cam.draw_disposable_text(&self.font, format!("Customers: {}", self.customer_line.get_score()),
+                                 SCORE_SIZE, SCORE_POS,
+                                 Colour::new(110, 77, 36, 255), Vec2::new(1.0, 1.0));
         
         self.sandwitch_render.draw(cam, &self.machine);
         self.customer_render.draw(cam, &mut self.customer_line, &self.sandwitch_render);
         if self.game_ended {
             cam.draw(&self.end_screen);
-            cam.draw_disposable_text(&self.font, format!("Score: {}", self.customer_line.get_score()),
-                                     FINAL_SCORE_SIZE * 4,
-                                     Vec2::new(self.end_screen.rect.x + 50.0,
+            cam.draw_disposable_text(&self.font, format!("Customers: {}", self.customer_line.get_score()),
+                                     FINAL_SCORE_SIZE * 3,
+                                     Vec2::new(self.end_screen.rect.x + 30.0,
                                                self.end_screen.rect.y + 120.0),
                                      Colour::new(0, 0, 0, 255), Vec2::new(1.0, 1.0));
             cam.draw_disposable_text(&self.font, "Press Down To Play Again".to_string(),
                                      FINAL_SCORE_SIZE,
-                                     Vec2::new(self.end_screen.rect.x + 70.0,
+                                     Vec2::new(self.end_screen.rect.x + 90.0,
                                                self.end_screen.rect.y + 270.0),
                                      Colour::new(0, 0, 0, 255), Vec2::new(1.0, 1.0));
             cam.draw(&self.end_sign);
@@ -131,18 +141,18 @@ impl Game {
             cam.draw_rect(Rect::new(0.0, 0.0, VIEW_WIDTH, VIEW_HEIGHT),
                           Colour::new(0, 0, 0, 100), Vec2::zero());
             cam.draw_disposable_text(&self.font, "Pawsed".to_string(), FINAL_SCORE_SIZE * 4,
-                                     Vec2::new(60.0, 120.0), Colour::white(), Vec2::zero()
+                                     Vec2::new(100.0, 120.0), Colour::white(), Vec2::zero()
             );
         }
     }
 }
 
-const SCORE_POS: Vec2 = Vec2::new(160.0, 80.0);
+const SCORE_POS: Vec2 = Vec2::new(120.0, 80.0);
 const SCORE_SIZE: u32 = 40;
-const FINAL_SCORE_SIZE: u32 = 25;
+const FINAL_SCORE_SIZE: u32 = 20;
 
 const LIVES_RECT: Vec2 = Vec2::new(10.0, 10.0);
 const LIVES_BUFFER: f64 = 10.0;
-const LIVES_POS: Vec2 = Vec2::new(SCORE_POS.x + 40.0, SCORE_POS.y + LIVES_RECT.y * 4.0);
+const LIVES_POS: Vec2 = Vec2::new(SCORE_POS.x + 80.0, SCORE_POS.y + LIVES_RECT.y * 4.0);
 
 const BG_OPACITY: u8 = 64;

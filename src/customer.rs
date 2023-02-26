@@ -24,15 +24,15 @@ const ACTIVE_CUSTOMERS: usize = 3;
 
 impl Customer {
     
-    pub fn new(wait_max: f64) -> Customer {
+    pub fn new(score: f64) -> Customer {
        let mut c =  Customer {
-            ings: VecDeque::new(),
-            sandwitch: None,
-            finished: false,
-            target: Target::new(),
-            waiting: false,
+           ings: VecDeque::new(),
+           sandwitch: None,
+           finished: false,
+           target: Target::new(),
+           waiting: false,
            wait_time: 0.0,
-           wait_max,
+           wait_max: ,
        };
         c.target.breath = true;
         c

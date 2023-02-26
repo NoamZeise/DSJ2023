@@ -1,6 +1,6 @@
 use std::{collections::VecDeque, path::Path};
 
-use crate::{sandwitch::{Ingredients, SandwitchMachine, Sandwitch, SandwitchRender, get_rand_ingredient}, moving_target::Target, Game};
+use crate::{sandwitch::{Ingredients, SandwitchMachine, Sandwitch, SandwitchRender, get_rand_ingredient}, moving_target::Target};
 
 use nze_game_sdl::{Camera, geometry::{Vec2, Rect}, GameObject, Render, Error, Colour};
 use rand::prelude::*;
@@ -13,6 +13,7 @@ struct Customer {
     waiting: bool,
     wait_max: f64,
     wait_time: f64,
+    max_request_delta: f64,
 }
 
 const MIN_REQUEST_SIZE: f64 = 2.0;
@@ -32,14 +33,15 @@ impl Customer {
            target: Target::new(),
            waiting: false,
            wait_time: 0.0,
-           wait_max: ,
+           wait_max: INITIAL_WAIT_TIME - (score as f64 * 0.4),
+           max_request_delta: MAX_REQUEST_DELTA + (score * 0.1),
        };
         c.target.breath = true;
         c
     }
 
     pub fn populate(&mut self, rng: &mut ThreadRng) {
-        let size = ((rng.gen::<f64>() as f64 * MAX_REQUEST_DELTA) + MIN_REQUEST_SIZE).round() as usize;
+        let size = ((rng.gen::<f64>() as f64 * self.max_request_delta) + MIN_REQUEST_SIZE).round() as usize;
         for i in 0..size {
             if i == 0 || i == size - 1 {
                 self.ings.push_front(Ingredients::Bread);
@@ -111,7 +113,7 @@ impl CustomerLine {
     }
 
     fn add_customer(&mut self) {
-        self.customers.push(Customer::new(INITIAL_WAIT_TIME - (self.score as f64 * 0.2)));
+        self.customers.push(Customer::new(self.score as f64));
         self.customers.last_mut().unwrap().target.breath_speed = self.rng.gen::<f64>() * 0.1 + 1.0;
         self.customers.last_mut().unwrap().target.breath_size.y = self.rng.gen::<f64>() * 0.1 + 1.0;
         self.populate_customers();
@@ -244,7 +246,7 @@ const CUSTOMER_ING_SPACING: f64 = -CUSTOMER_ING_SIZE.y * 0.5;
 const CUSTOMER_SIZE: Vec2 = Vec2::new(70.0, 0.0);
 const CUSTOMER_OFFSET: Vec2 = Vec2::new(-20.0, 20.0);
 
-const CUSTOMER_PATIENCE_OFFSET: Rect = Rect::new(-5.0, -10.0, 40.0, 5.0);
+const CUSTOMER_PATIENCE_OFFSET: Rect = Rect::new(-5.0, -10.0, 30.0, 5.0);
 
 impl CustomerRender {
     pub fn new(render: &mut Render) -> Result<CustomerRender, Error> {

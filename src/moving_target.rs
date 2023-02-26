@@ -11,14 +11,15 @@ pub struct Target {
     pub breath_speed: f64,
     time: f64,
     offset: Vec2,
+    perm_off: Vec2,
 }
 
 impl Target {
     pub fn new() -> Target {
-        Self::new_with_speed(100.0, Vec2::zero())
+        Self::new_with_speed(100.0, Vec2::zero(), Vec2::zero())
     }
 
-    pub fn new_with_speed(speed: f64, target: Vec2) -> Target {
+    pub fn new_with_speed(speed: f64, target: Vec2, perm_off: Vec2) -> Target {
         Target {
             current_pos: target,
             target_pos: target,
@@ -28,6 +29,7 @@ impl Target {
             offset: Vec2::zero(),
             time: 0.0,
             breath_speed: 2.0,
+            perm_off,
         }
     }
     
@@ -63,10 +65,10 @@ impl Target {
     }
 
     pub fn get_pos(&self) -> Vec2 {
-        self.current_pos + self.offset
+        self.current_pos + self.offset + self.perm_off
     }
 
     pub fn get_pos_no_offset(&self) -> Vec2 {
-        self.current_pos
+        self.current_pos + self.perm_off
     }
 }

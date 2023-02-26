@@ -87,6 +87,8 @@ pub struct Input {
     pub right: Btn,
     pub down: Btn,
     pub up: Btn,
+    pub pause: Btn,
+    pub fullscreen: Btn,
 }
 
 impl Input {
@@ -112,6 +114,16 @@ impl Input {
                 vec![Button::DPadUp, Button::A],
                 vec![Joy::new(Side::Left, Dir::Up)]
             ),
+            pause: Btn::new(
+                vec![Key::Escape],
+                vec![Button::Start],
+                vec![],
+            ),
+            fullscreen: Btn::new(
+                vec![Key::F],
+                vec![Button::Back],
+                vec![],
+            ),
         }
     }
 
@@ -120,5 +132,7 @@ impl Input {
         self.right.update(controls);
         self.down.update(controls);
         self.up.update(controls);
+        self.pause.update(controls);
+        self.fullscreen.update(controls);
     }
 }

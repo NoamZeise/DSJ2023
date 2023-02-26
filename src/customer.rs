@@ -17,8 +17,8 @@ struct Customer {
 }
 
 const MIN_REQUEST_SIZE: f64 = 2.0;
-const MAX_REQUEST_DELTA: f64 = 4.0;
-const INITIAL_WAIT_TIME: f64 = 50.0;
+const MAX_REQUEST_DELTA: f64 = 3.0;
+const INITIAL_WAIT_TIME: f64 = 60.0;
 const INITIAL_SPAWN_TIME: f64 = 14.0;
 const INITIAL_LIVES: u32 = 3;
 const ACTIVE_CUSTOMERS: usize = 3;
@@ -34,7 +34,7 @@ impl Customer {
            waiting: false,
            wait_time: 0.0,
            wait_max: INITIAL_WAIT_TIME - (score as f64 * 0.4),
-           max_request_delta: MAX_REQUEST_DELTA + (score * 0.1),
+           max_request_delta: MAX_REQUEST_DELTA + (score * 0.2),
        };
         c.target.breath = true;
         c
@@ -81,7 +81,7 @@ impl Customer {
     }
 }
 
-const MAX_CUSTOMERS: usize = 7;
+const MAX_CUSTOMERS: usize = 6;
 
 pub struct CustomerLine {
     active_customers: usize,
@@ -163,7 +163,8 @@ impl CustomerLine {
             self.leaving_customers[c_i].target.set_target(
                 CUSTOMER_END
             );
-            let target = self.leaving_customers[c_i].target.get_pos();
+            let mut target = self.leaving_customers[c_i].target.get_pos();
+            target.y += 30.0;
             self.leaving_customers[c_i].sandwitch.as_mut().unwrap().set_target(
                 target
             );
@@ -237,16 +238,16 @@ pub struct CustomerRender {
     customer: GameObject,
     speech: GameObject,
 }
-const CUSTOMER_START: Vec2 = Vec2::new(500.0, 300.0);
-const CUSTOMER_BASE: Vec2 = Vec2::new(180.0, CUSTOMER_START.y);
+const CUSTOMER_START: Vec2 = Vec2::new(500.0, 280.0);
+const CUSTOMER_BASE: Vec2 = Vec2::new(100.0, CUSTOMER_START.y - 5.0);
 const CUSTOMER_END: Vec2 = Vec2::new(CUSTOMER_BASE.x - 25.0, CUSTOMER_BASE.y + 150.0);
 const CUSTOMER_ING_SIZE: Vec2 = Vec2::new(24.0, 12.0);
-const CUSTOMER_ING_OFFSET: Vec2 = Vec2::new(13.0, 0.0);
+const CUSTOMER_ING_OFFSET: Vec2 = Vec2::new(26.0, 34.0);
 const CUSTOMER_ING_SPACING: f64 = -CUSTOMER_ING_SIZE.y * 0.5;
-const CUSTOMER_SIZE: Vec2 = Vec2::new(70.0, 0.0);
+const CUSTOMER_SIZE: Vec2 = Vec2::new(90.0, 0.0);
 const CUSTOMER_OFFSET: Vec2 = Vec2::new(-20.0, 20.0);
 
-const CUSTOMER_PATIENCE_OFFSET: Rect = Rect::new(-5.0, -10.0, 30.0, 5.0);
+const CUSTOMER_PATIENCE_OFFSET: Rect = Rect::new(-5.0, -20.0, 30.0, 5.0);
 
 impl CustomerRender {
     pub fn new(render: &mut Render) -> Result<CustomerRender, Error> {
@@ -276,13 +277,14 @@ impl CustomerRender {
             }
             let pos_abs = customers.customers[i].target.get_pos_no_offset();
             let mut speech = self.speech.clone();
-            speech.rect.x = pos_abs.x - CUSTOMER_OFFSET.x;
-            speech.rect.h = (customers.customers[i].ings.len() as f64 * CUSTOMER_ING_SIZE.y) + 30.0;
-            speech.rect.y = (pos_abs.y - CUSTOMER_OFFSET.y - speech.rect.h) + 45.0;
+            speech.rect.x = pos_abs.x - CUSTOMER_OFFSET.x + CUSTOMER_ING_OFFSET.x;
+            speech.rect.h = (customers.customers[i].ings.len() as f64 * (CUSTOMER_ING_SIZE.y + CUSTOMER_ING_SPACING)) + 50.0;
+            speech.rect.y = (pos_abs.y - CUSTOMER_OFFSET.y - speech.rect.h) + 45.0 + CUSTOMER_ING_OFFSET.y;
             cam.draw(&speech);
             sw_render.render_ings(cam, customers.customers[i].ings.iter(),
-                                       Vec2::new(pos_abs.x - CUSTOMER_OFFSET.x, pos_abs.y - CUSTOMER_OFFSET.y),
-                                       CUSTOMER_ING_OFFSET.x,
+                                  Vec2::new(pos_abs.x - CUSTOMER_OFFSET.x,
+                                            pos_abs.y - CUSTOMER_OFFSET.y + CUSTOMER_ING_OFFSET.y),
+                                       CUSTOMER_ING_OFFSET.x + 13.0,
                                        CUSTOMER_ING_SIZE, CUSTOMER_ING_SPACING, -1.0);
         }
         for c in customers.leaving_customers.iter_mut() {

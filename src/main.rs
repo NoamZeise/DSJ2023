@@ -1,7 +1,7 @@
 use nze_game_sdl::{
     DrawingArea,
     Render,
-    input::{Controls, keyboard::Key},
+    input::Controls,
     geometry::{Rect, Vec2},
     Error,
 };
@@ -19,11 +19,11 @@ pub fn main() -> Result<(), Error> {
     let mut game = Game::new(&mut render)?;
 
     while !controls.should_close {
-        if controls.kb.press(Key::F) {
-            render.toggle_fullscreen(&mut cam)?;
-        }
         controls.update(&cam);
         game.update(&mut controls);
+        if game.input.fullscreen.down(true) {
+            render.toggle_fullscreen(&mut cam)?;
+        }
         render.start_draw();
         game.draw(&mut cam);
         render.end_draw(&mut cam)?;

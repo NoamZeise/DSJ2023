@@ -54,14 +54,15 @@ impl Sandwitch {
         self.ing_targets.push_back(t);
     }
 
-    pub fn add(&mut self, ingredient: Ingredients) {
+    pub fn add(&mut self, ingredient: Ingredients, rng: &mut ThreadRng) {
         self.ingredients.push_front(ingredient);
         self.ing_targets.push_front(Target::new_with_speed(
             self.target.speed,
             Vec2::new(
                 self.target.get_pos_no_offset().x,
                 self.target.get_pos_no_offset().y + Self::get_ing_yoff(self.sw_dir, self.ing_targets.len() as f64 - 10.0)
-            )
+            ),
+            Vec2::new((rng.gen::<f64>() * 3.0) - 1.5, 0.0)
         ));
     }
 
@@ -132,6 +133,7 @@ pub struct SandwitchMachine {
     queue: Sandwitch,
     active: usize,
     rng: ThreadRng,
+    delicat_target: Target,
 }
 
 impl SandwitchMachine {
@@ -142,7 +144,12 @@ impl SandwitchMachine {
             queue: Sandwitch::new(),
             active: 0,
             rng:thread_rng(),
+            delicat_target: Target::new(),
         };
+        sm.delicat_target.breath = true;
+        sm.delicat_target.set_target(DELICAT_LOCATION);
+        sm.delicat_target.breath_speed /= 2.5;
+        sm.delicat_target.breath_size.y = 1.5;
         for _ in 0..sm.queue_size {
             sm.sandwitches.push(Sandwitch::new());
         }
@@ -150,12 +157,19 @@ impl SandwitchMachine {
             s.reset();
         }
         sm.queue.set_speed(QUEUE_SPEED);
+        sm.queue.set_target(sm.get_queue_target());
         sm.queue.target.breath = true;
         sm.queue.target.breath_size = Vec2::new(0.0, 4.0);
         sm.queue.target.breath_speed = 0.5;
         sm.queue.sw_dir = 1.0;
         sm.fill_queue();
         sm
+    }
+
+    fn get_queue_target(&self) -> Vec2 {
+        Vec2::new(QUEUE_BASE.x + QUEUE_MOVE * self.active as f64,
+                  QUEUE_BASE.y
+        )
     }
 
     pub fn update(&mut self, dt: f64) {
@@ -166,17 +180,15 @@ impl SandwitchMachine {
             );
         }
         self.sandwitches[0].clear();
-        self.queue.set_target(
-            Vec2::new(QUEUE_BASE.x + QUEUE_MOVE * self.active as f64,
-                      QUEUE_BASE.y
-            ));
+        self.queue.set_target(self.get_queue_target());
         self.queue.update(dt);
         self.queue.target.breath_update(dt);
+        self.delicat_target.breath_update(dt);
     }
 
     pub fn fill_queue(&mut self) {
         while self.queue.ingredients.len() < self.queue_size {
-            self.queue.add(get_rand_ingredient(&mut self.rng));
+            self.queue.add(get_rand_ingredient(&mut self.rng), &mut self.rng);
         }
     }
 
@@ -187,7 +199,10 @@ impl SandwitchMachine {
     }
 
     pub fn bin(&mut self) {
-        if self.sandwitches[self.active].ingredients.len() > 1 {
+        if self.sandwitches[self.active].ingredients.len() > 0 {
+           // if self.sandwitches[self.active].ingredients.len() == 1 && self.active != 0 {
+           //     return;
+           // }
             let (i, t) = self.sandwitches[self.active].take().unwrap();
             self.queue.add_back(
                 i, t
@@ -213,20 +228,31 @@ impl SandwitchMachine {
 pub struct SandwitchRender {
     ingredient: HashMap<Ingredients, GameObject>,
     chef: GameObject,
+    restauraunt_front: GameObject,
+    delicat: GameObject,
+    plate: GameObject,
 }
 
 pub const ING_SIZE: Vec2 = Vec2::new(46.0, 24.0);
 const QUEUE_BASE: Vec2 = Vec2::new(30.0, 20.0);
-const CHEF_OFFSET: Vec2 = Vec2::new(-20.0, 91.0);
+const CHEF_OFFSET: Vec2 = Vec2::new(-20.0, 100.0);
 const QUEUE_MOVE: f64 = ING_SIZE.x * 1.6;
 const QUEUE_ING_SPACING: f64 = -ING_SIZE.y * 0.5;
 pub const SANDWITCH_BASE: Vec2 = Vec2::new(QUEUE_BASE.x, QUEUE_BASE.y + ING_SIZE.y * 8.0);
+
+const DELICAT_LOCATION: Vec2 = Vec2::new(0.0, 210.0);
+const PLATE_OFFSET: Vec2 = Vec2::new(-2.0, 11.0);
 
 impl SandwitchRender {
     pub fn new(render: &mut Render) -> Result<SandwitchRender, Error> {
         Ok(SandwitchRender {
             ingredient: Self::get_ingredient_hash(render)?,
             chef: GameObject::new_from_tex(render.texture_manager.load(Path::new("resources/textures/chef.png"))?),
+            delicat: GameObject::new_from_tex(render.texture_manager.load(Path::new("resources/textures/deli-cat.png"))?),
+            restauraunt_front: GameObject::new_from_tex(render.texture_manager.load(
+                Path::new("resources/textures/restaurant_front.png"))?),
+            plate: GameObject::new_from_tex(render.texture_manager.load(
+                Path::new("resources/textures/plate.png"))?),
         })
     }
 
@@ -234,9 +260,21 @@ impl SandwitchRender {
         self.chef.rect.x = machine.queue.target.get_pos().x + CHEF_OFFSET.x;
         self.chef.rect.y = machine.queue.target.get_pos().y + CHEF_OFFSET.y;
         cam.draw(&self.chef);
+        cam.draw(&self.restauraunt_front);
+        let delicat_pos = machine.delicat_target.get_pos();
+        self.delicat.rect.x = delicat_pos.x;
+        self.delicat.rect.y = delicat_pos.y;
+        cam.draw(&self.delicat);
         self.render_sw(cam, &machine.queue);
 
-        for sw in machine.sandwitches.iter() {
+        for (i, sw) in machine.sandwitches.iter().enumerate() {
+            if i != 0 {
+                let mut p = self.plate.clone();
+                let pos = sw.target.get_pos();
+                p.rect.x = pos.x + PLATE_OFFSET.x;
+                p.rect.y = pos.y + PLATE_OFFSET.y;
+                cam.draw(&p);
+            }
             self.render_sw(cam, &sw);
         }
     }

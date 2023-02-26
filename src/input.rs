@@ -34,6 +34,7 @@ pub struct Btn {
     key: Vec<Key>,
     btn: Vec<Button>,
     joy: Vec<Joy>,
+    since_joy: f64,
 }
 
 impl Btn {
@@ -41,7 +42,7 @@ impl Btn {
         Btn {
             input: false,
             prev_input: false,
-            key, btn, joy
+            key, btn, joy, since_joy: 0.0,
         }
     }
 
@@ -61,7 +62,14 @@ impl Btn {
         for j in self.joy.iter() {
             if j.check(controls) {
                 self.input = true;
+                self.since_joy += controls.frame_elapsed;
+            } else {
+                self.since_joy = 0.0;
             }
+        }
+        if self.since_joy > 0.4 {
+            self.since_joy = 0.0;
+            self.prev_input = false;
         }
     }
 

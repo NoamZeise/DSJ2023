@@ -1,6 +1,6 @@
 use std::{collections::VecDeque, path::Path};
 
-use crate::{sandwitch::{Ingredients, SandwitchMachine, Sandwitch, SandwitchRender, get_rand_ingredient}, moving_target::Target};
+use crate::{sandwitch::{Ingredients, SandwitchMachine, Sandwitch, SandwitchRender, get_rand_ingredient}, moving_target::Target, Game};
 
 use nze_game_sdl::{Camera, geometry::{Vec2, Rect}, GameObject, Render, Error, Colour};
 use rand::prelude::*;
@@ -17,7 +17,10 @@ struct Customer {
 
 const MIN_REQUEST_SIZE: f64 = 2.0;
 const MAX_REQUEST_DELTA: f64 = 4.0;
-const INITIAL_WAIT_TIME: f64 = 60.0;
+const INITIAL_WAIT_TIME: f64 = 50.0;
+const INITIAL_SPAWN_TIME: f64 = 14.0;
+const INITIAL_LIVES: u32 = 3;
+const ACTIVE_CUSTOMERS: usize = 3;
 
 impl Customer {
     
@@ -82,7 +85,6 @@ pub struct CustomerLine {
     active_customers: usize,
     customers: Vec<Customer>,
     leaving_customers: Vec<Customer>,
-    customers_to_remove: Vec<usize>,
     angry_customers: Vec<Customer>,
     rng: ThreadRng,
     time_since_customer: f64,
@@ -94,23 +96,22 @@ pub struct CustomerLine {
 impl CustomerLine {
     pub fn new() -> CustomerLine {
         let mut line = CustomerLine {
-            active_customers: 3,
+            active_customers: ACTIVE_CUSTOMERS,
             customers: vec![],
             leaving_customers: Vec::new(),
             angry_customers: Vec::new(),
-            customers_to_remove: Vec::new(),
             rng: thread_rng(),
-            time_since_customer: 12.0,
-            next_customer_delay: 12.0,
+            time_since_customer: INITIAL_SPAWN_TIME,
+            next_customer_delay: INITIAL_SPAWN_TIME,
             score: 0,
-            lives: 5,
+            lives: INITIAL_LIVES,
         };
         line.populate_customers();
         line
     }
 
     fn add_customer(&mut self) {
-        self.customers.push(Customer::new(INITIAL_WAIT_TIME - (self.score as f64 * 0.1)));
+        self.customers.push(Customer::new(INITIAL_WAIT_TIME - (self.score as f64 * 0.2)));
         self.customers.last_mut().unwrap().target.breath_speed = self.rng.gen::<f64>() * 0.1 + 1.0;
         self.customers.last_mut().unwrap().target.breath_size.y = self.rng.gen::<f64>() * 0.1 + 1.0;
         self.populate_customers();
@@ -122,6 +123,7 @@ impl CustomerLine {
             self.time_since_customer = 0.0;
             self.add_customer();
         }
+        let mut to_remove = None;
         for (i, c) in self.customers.iter_mut().enumerate() {
             if c.waiting {
                 c.target.breath_update(dt);
@@ -142,12 +144,16 @@ impl CustomerLine {
             }
             c.update(dt);
             if c.waited_too_long() {
-                self.customers_to_remove.push(i);
+                to_remove = Some(i);
             }
         }
 
-        for i in self.customers_to_remove.drain(0..self.customers_to_remove.len()) {
-            self.angry_customers.push(self.customers.remove(i));
+        match to_remove {
+            Some(i) => {
+                self.angry_customers.push(self.customers.remove(i));
+                self.populate_customers();
+            },
+            None => (),
         }
 
         let mut c_i = 0;
@@ -213,7 +219,7 @@ impl CustomerLine {
 
     fn add_score(&mut self) {
         self.score += 1;
-        self.next_customer_delay -= 0.2;
+        self.next_customer_delay -= 0.1;
     }
 
     pub fn get_score(&self) -> u64 {
@@ -227,14 +233,15 @@ impl CustomerLine {
 
 pub struct CustomerRender {
     customer: GameObject,
+    speech: GameObject,
 }
 const CUSTOMER_START: Vec2 = Vec2::new(500.0, 300.0);
 const CUSTOMER_BASE: Vec2 = Vec2::new(180.0, CUSTOMER_START.y);
 const CUSTOMER_END: Vec2 = Vec2::new(CUSTOMER_BASE.x - 25.0, CUSTOMER_BASE.y + 150.0);
 const CUSTOMER_ING_SIZE: Vec2 = Vec2::new(24.0, 12.0);
-const CUSTOMER_ING_OFFSET: Vec2 = Vec2::new(10.0, 0.0);
+const CUSTOMER_ING_OFFSET: Vec2 = Vec2::new(13.0, 0.0);
 const CUSTOMER_ING_SPACING: f64 = -CUSTOMER_ING_SIZE.y * 0.5;
-const CUSTOMER_SIZE: Vec2 = Vec2::new(50.0, 0.0);
+const CUSTOMER_SIZE: Vec2 = Vec2::new(70.0, 0.0);
 const CUSTOMER_OFFSET: Vec2 = Vec2::new(-20.0, 20.0);
 
 const CUSTOMER_PATIENCE_OFFSET: Rect = Rect::new(-5.0, -10.0, 40.0, 5.0);
@@ -245,6 +252,10 @@ impl CustomerRender {
             customer: GameObject::new_from_tex(
                 render.texture_manager.load(
                     Path::new("resources/textures/customer.png"))?
+            ),
+            speech: GameObject::new_from_tex(
+                render.texture_manager.load(
+                    Path::new("resources/textures/speech.png"))?
             ),
         })
     }
@@ -261,9 +272,14 @@ impl CustomerRender {
             if !customers.customers[i].waiting {
                 continue;
             }
-            let pos = customers.customers[i].target.get_pos();
+            let pos_abs = customers.customers[i].target.get_pos_no_offset();
+            let mut speech = self.speech.clone();
+            speech.rect.x = pos_abs.x - CUSTOMER_OFFSET.x;
+            speech.rect.h = (customers.customers[i].ings.len() as f64 * CUSTOMER_ING_SIZE.y) + 30.0;
+            speech.rect.y = (pos_abs.y - CUSTOMER_OFFSET.y - speech.rect.h) + 45.0;
+            cam.draw(&speech);
             sw_render.render_ings(cam, customers.customers[i].ings.iter(),
-                                       Vec2::new(pos.x - CUSTOMER_OFFSET.x, pos.y - CUSTOMER_OFFSET.y),
+                                       Vec2::new(pos_abs.x - CUSTOMER_OFFSET.x, pos_abs.y - CUSTOMER_OFFSET.y),
                                        CUSTOMER_ING_OFFSET.x,
                                        CUSTOMER_ING_SIZE, CUSTOMER_ING_SPACING, -1.0);
         }
